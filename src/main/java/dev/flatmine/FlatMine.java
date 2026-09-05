@@ -24,7 +24,7 @@ public final class FlatMine implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(FlatMinePayloads.Status.ID, FlatMinePayloads.Status.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Select.ID, (payload, context) ->
-            context.server().execute(() -> select(context.player(), payload.pos()))
+            context.server().execute(() -> select(context.player(), payload.pos()) )
         );
 
         ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Action.ID, (payload, context) ->
@@ -44,9 +44,10 @@ public final class FlatMine implements ModInitializer {
     }
 
     static void select(ServerPlayerEntity p, BlockPos pos) {
+        boolean creative = p.isCreative();
         if (!(p.getWorld() instanceof ServerWorld w) ||
-            (!p.isCreative() && !p.interactionManager.isSurvivalLike()) ||
-            (!p.isCreative() && !validTool(p.getMainHandStack())) ||
+            (!creative && !p.interactionManager.isSurvivalLike()) ||
+            (!creative && !validTool(p.getMainHandStack())) ||
             !w.isInBuildLimit(pos) ||
             !w.isChunkLoaded(pos) ||
             InteractiveBlocks.isInteractive(w, pos)) {
@@ -78,9 +79,11 @@ public final class FlatMine implements ModInitializer {
 
         Cuboid c = PENDING.get(p.getUuid());
         SelectionState s = SEL.get(p.getUuid());
+        boolean creative = p.isCreative();
 
-        boolean allowedMode = p.isCreative() ? destroyDrops : p.interactionManager.isSurvivalLike();
-        boolean allowedTool = p.isCreative() || validTool(p.getMainHandStack());
+        // Creative chỉ có một chế độ: đào và luôn tiêu hủy toàn bộ drop.
+        boolean allowedMode = creative || p.interactionManager.isSurvivalLike();
+        boolean allowedTool = creative || validTool(p.getMainHandStack());
 
         if (c == null || s == null || s.dimension != p.getWorld().getRegistryKey() ||
             !allowedMode || !allowedTool) {
@@ -93,15 +96,16 @@ public final class FlatMine implements ModInitializer {
 
         if (a == 1 || a == 2) {
             PENDING.put(p.getUuid(), c);
-            send(p, 3, new BlockPos(c.minX(), c.minY(), c.minZ()), new BlockPos(c.maxX(), c.maxY(), c.maxZ()), c.volume(), p.getMainHandStack().getMaxDamage() - p.getMainHandStack().getDamage());
+            send(p, 3, new BlockPos(c.minX(), c.minY(), c.minZ()), new BlockPos(c.maxX(), c.maxY(), c.maxZ()), c.volume(), 0);
 
             PENDING.remove(p.getUuid());
-            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, destroyDrops);
+            // Creative luôn ép destroyDrops=true. Survival giữ đúng lựa chọn của người chơi.
+            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, creative || destroyDrops);
             return;
         }
 
         if (a == 3) {
-            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, destroyDrops);
+            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, creative || destroyDrops);
             PENDING.remove(p.getUuid());
             send(p, 4, new BlockPos(c.minX(), c.minY(), c.minZ()), new BlockPos(c.maxX(), c.maxY(), c.maxZ()), c.volume(), 0);
         }
