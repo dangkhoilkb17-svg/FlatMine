@@ -50,6 +50,12 @@ public final class MiningJobManager {
     public static boolean processMiningTick(ServerPlayerEntity player, ServerWorld world, Queue<BlockPos> queue, float speedMultiplier, boolean destroyDrops) {
         ItemStack tool = player.getMainHandStack();
 
+        // Creative: chỉ chạy chế độ tiêu hủy, không kiểm tra tool, harvest, drop hay durability.
+        if (player.isCreative() && destroyDrops) {
+            return destroyQueue(world, queue, 32 * speedMultiplier, true, player);
+        }
+
+        // Mọi chế độ khác phải là Survival-like và có cúp/xẻng để dùng mining mechanics.
         if (!isPickaxeOrShovel(tool)) {
             player.sendMessage(Text.literal("§c[FlatMine] Bị hủy: Bạn phải cầm Cúp hoặc Xẻng để tiếp tục đào!"), true);
             clearSelection(player);
@@ -67,18 +73,12 @@ public final class MiningJobManager {
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
             /*
-             * FlatMine phá block độc lập với loại/cấp tool và không mô phỏng tốc độ đào Vanilla.
-             * Chỉ việc CÓ DROP hay KHÔNG DROP mới dùng điều kiện harvest của Vanilla:
-             *
-             * - Block không yêu cầu tool: tool vẫn có thể nhận drop.
-             *   Ví dụ cúp + Dirt hoặc xẻng + Dirt -> Dirt drop.
-             * - Block yêu cầu tool: Vanilla tự kiểm tra loại tool + mining level qua
-             *   ItemStack.isSuitableFor(state).
-             *   Ví dụ cúp sắt + Diamond Ore -> Diamond drop; cúp đá + Diamond Ore -> không drop.
-             *
-             * getDroppedStacks() dùng loot table + player + tool để giữ Silk Touch, Fortune
-             * và các quy tắc drop Vanilla 1.21.1. Kết quả này cũng quyết định độ bền:
-             * có item/block drop -> -1; không có -> -2.
+             * Survival mining mechanics:
+             * - FlatMine phá block độc lập với tốc độ/loại tool.
+             * - Drop vẫn dùng điều kiện harvest + loot của Vanilla 1.21.1.
+             * - Đủ điều kiện harvest và có item/block drop -> -1 durability.
+             * - Không đủ điều kiện hoặc không có item/block drop -> -2 durability.
+             * - Block không yêu cầu tool vẫn có thể drop bình thường với cúp/xẻng.
              */
             boolean canHarvestForDrop = !state.isToolRequired() || tool.isSuitableFor(state);
             List<ItemStack> drops = canHarvestForDrop
@@ -86,7 +86,6 @@ public final class MiningJobManager {
                     : Collections.emptyList();
             boolean hasDrop = !drops.isEmpty();
 
-            // Quy tắc FlatMine: có drop -> -1 durability; không có drop -> -2 durability.
             if (!player.isCreative() && tool.isDamageable()) {
                 tool.damage(hasDrop ? 1 : 2, player, EquipmentSlot.MAINHAND);
                 if (tool.isEmpty()) {
@@ -97,12 +96,9 @@ public final class MiningJobManager {
             }
 
             if (destroyDrops) {
-                // destroyDrops=true: chủ động tiêu hủy toàn bộ item/XP drop.
                 if (blockEntity instanceof Inventory inv) inv.clear();
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
             } else {
-                // Vanilla xử lý item/block drops + BlockEntity inventory drops.
-                // Không tự spawn từng stack vì như vậy sẽ bỏ qua một số hành vi của Vanilla.
                 if (canHarvestForDrop) {
                     Block.dropStacks(state, world, pos, blockEntity, player, tool);
                     state.onStacksDropped(world, pos, tool, true);
@@ -115,6 +111,29 @@ public final class MiningJobManager {
 
         if (queue.isEmpty()) {
             player.sendMessage(Text.literal("§a[FlatMine] Đã dọn dẹp xong khu vực!"), true);
+            clearSelection(player);
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean destroyQueue(ServerWorld world, Queue<BlockPos> queue, float target, boolean force, ServerPlayerEntity player) {
+        int brokenCount = 0;
+        int targetBreaks = Math.max(1, Math.round(target));
+
+        while (!queue.isEmpty() && brokenCount < targetBreaks) {
+            BlockPos pos = queue.poll();
+            var state = world.getBlockState(pos);
+            if (state.isAir() || state.getHardness(world, pos) < 0) continue;
+
+            BlockEntity blockEntity = world.getBlockEntity(pos);
+            if (blockEntity instanceof Inventory inv) inv.clear();
+            world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
+            brokenCount++;
+        }
+
+        if (queue.isEmpty()) {
+            player.sendMessage(Text.literal("§a[FlatMine] Đã tiêu hủy xong khu vực!"), true);
             clearSelection(player);
             return true;
         }
