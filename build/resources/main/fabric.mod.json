@@ -1,0 +1,12 @@
+{
+ "schemaVersion": 1,
+ "id": "flatmine",
+ "version": "1.0.0",
+ "name": "FlatMine",
+ "description": "Server-authoritative free two-corner cuboid mining for Survival.",
+ "authors": ["FlatMine"],
+ "license": "MIT",
+ "environment": "*",
+ "entrypoints": { "main": ["dev.flatmine.FlatMine"], "client": ["dev.flatmine.client.FlatMineClient"] },
+ "depends": { "fabricloader": ">=0.16.10", "minecraft": "~1.21.1", "java": ">=21", "fabric-api": "*" }
+}
