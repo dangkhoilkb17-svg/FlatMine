@@ -1,28 +1,32 @@
 # FlatMine
 
-**FlatMine** là Fabric mod cho **Minecraft Java Edition 1.21.1**, được thiết kế để tự động phá một vùng hình hộp chữ nhật 3D (cuboid) trong **Survival**.
+**FlatMine** là Fabric mod cho **Minecraft Java Edition 1.21.1**, cho phép chọn hai block làm hai góc đối diện của một vùng hình hộp chữ nhật 3D (cuboid) và tự động xử lý toàn bộ block trong vùng.
 
 ## Tính năng
 
-- Chọn **2 block làm 2 góc đối diện** để xác định toàn bộ vùng đào.
-- Hỗ trợ vùng theo cả **X, Y và Z**, không giới hạn trong một mặt phẳng.
-- Sau khi xác nhận, FlatMine tự động xử lý toàn bộ block trong vùng đã chọn.
-- Quá trình đào được thực hiện **phía server**, phù hợp với cơ chế server-authoritative của Minecraft.
-- Chỉ cho phép bắt đầu đào khi người chơi đang ở **Survival-like mode** và đang cầm **cúp hoặc xẻng**.
-- Các block tương tác như container/block có giao diện được loại khỏi vùng tự động đào để tránh phá nhầm các block đang được sử dụng.
+- Chọn **2 block làm 2 góc đối diện** để xác định vùng.
+- Hỗ trợ vùng 3D theo **X, Y và Z**.
+- Server tự động xử lý các block trong vùng đã chọn.
+- Hỗ trợ giới hạn số lượng block trước khi bắt đầu.
+- Có tùy chọn **tiêu hủy drop**.
+- Các block tương tác/container được lọc để tránh phá nhầm block đang được sử dụng.
 
-## Cơ chế phá block
+## Chế độ Survival
 
-FlatMine không cố mô phỏng thời gian đào Vanilla cho từng block. Tốc độ xử lý vùng được điều khiển bởi hệ thống mining job của mod.
+Trong **Survival / Survival-like**, FlatMine hoạt động với cơ chế mining riêng nhưng giữ quy tắc harvest và loot của Minecraft cho việc xác định drop.
 
-Mọi block hợp lệ trong vùng đều có thể bị FlatMine phá. **Việc block có item/block drop hay không vẫn dựa trên cơ chế harvest và loot của Minecraft 1.21.1.**
+### Cách phá block
 
-Quy tắc độ bền của công cụ trong FlatMine:
+- Mọi block hợp lệ trong vùng đều có thể bị FlatMine phá.
+- Tốc độ xử lý không phụ thuộc vào tốc độ đào riêng của từng block như khi đào thủ công.
+- Việc **có drop hay không** được xác định bằng điều kiện harvest của Minecraft 1.21.1 và loot của block.
 
-| Kết quả phá block | Độ bền |
+### Độ bền công cụ
+
+| Kết quả | Độ bền |
 |---|---:|
-| Block có drop hợp lệ | -1 |
-| Block không có drop do không đủ điều kiện harvest | -2 |
+| Có item/block drop | -1 |
+| Không có drop do không đủ điều kiện harvest | -2 |
 
 Ví dụ:
 
@@ -32,11 +36,18 @@ Ví dụ:
 - Cúp sắt + Diamond Ore → phá được, **drop**, -1 durability.
 - Cúp kim cương + Dirt → phá được, **drop Dirt**, -1 durability.
 
-FlatMine sử dụng các API drop/harvest của Minecraft để giữ các quy tắc loot của Vanilla thay vì tự tạo một bảng drop riêng.
+FlatMine dùng API harvest/loot của Minecraft thay vì tự tạo danh sách drop riêng, nên các quy tắc loot như Silk Touch/Fortune tiếp tục được xử lý bởi hệ thống của Minecraft.
 
-## Giới hạn vùng
+## Chế độ Creative
 
-Vùng được xác định hoàn toàn từ 2 điểm đã chọn. Có thể giới hạn số block trước khi bắt đầu đào; khi giới hạn được áp dụng, vùng sẽ được thu nhỏ theo logic của mod.
+Trong **Creative**, các cơ chế mining của Survival **không hoạt động**:
+
+- Không kiểm tra cấp độ cúp để quyết định drop.
+- Không xử lý drop.
+- Không trừ độ bền.
+- Không chạy cơ chế harvest của Survival.
+
+Creative **chỉ được sử dụng chức năng tiêu hủy vùng**. Khi bật tùy chọn tiêu hủy drop, FlatMine xóa các block trong vùng mà không tạo item/XP drop và không yêu cầu cúp/xẻng.
 
 ## Yêu cầu
 
