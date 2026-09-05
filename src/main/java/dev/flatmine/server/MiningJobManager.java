@@ -67,19 +67,24 @@ public final class MiningJobManager {
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
             /*
-             * KIỂM TRA DROP THEO CƠ CHẾ TOOL CỦA VANILLA:
-             * - Block không yêu cầu tool đúng loại -> vẫn có thể drop bình thường.
-             * - Block yêu cầu tool -> phải đúng loại và đúng tier (gỗ/đá/sắt/kim cương/netherite...).
+             * Kết hợp cơ chế phá/harvest và drop của Vanilla:
              *
-             * Kiểm tra trước destroyDrops để option tiêu hủy drop không ảnh hưởng độ bền.
+             * - Nếu block không yêu cầu tool, cúp/xẻng vẫn có thể harvest và nhận drop.
+             *   Ví dụ: cúp + Dirt hoặc xẻng + Dirt đều drop Dirt.
+             * - Nếu block yêu cầu tool, phải dùng đúng loại và đủ tier thông qua
+             *   ItemStack.isSuitableFor().
+             *   Ví dụ: cúp đá + Iron Ore -> drop; cúp gỗ + Iron Ore -> không drop;
+             *   cúp sắt + Diamond Ore -> không drop.
+             * - Tính drop trước khi destroyDrops để destroyDrops không làm thay đổi
+             *   quy tắc độ bền.
              */
-            boolean toolCanHarvest = !state.isToolRequired() || tool.isSuitableFor(state);
-            List<ItemStack> drops = toolCanHarvest
+            boolean canHarvest = !state.isToolRequired() || tool.isSuitableFor(state);
+            List<ItemStack> drops = canHarvest
                     ? Block.getDroppedStacks(state, world, pos, blockEntity, player, tool)
                     : Collections.emptyList();
             boolean hasDrop = !drops.isEmpty();
 
-            // Có drop hợp lệ -> -1; không có drop -> -2.
+            // Có drop hợp lệ theo Vanilla -> -1 độ bền; không có -> -2.
             if (!player.isCreative() && tool.isDamageable()) {
                 tool.damage(hasDrop ? 1 : 2, player, EquipmentSlot.MAINHAND);
                 if (tool.isEmpty()) {
@@ -89,13 +94,19 @@ public final class MiningJobManager {
                 }
             }
 
-            // destroyDrops chỉ xử lý việc drop có được xuất hiện hay không.
+            // destroyDrops chỉ quyết định drop có xuất hiện hay không.
             if (destroyDrops) {
                 if (blockEntity instanceof Inventory inv) inv.clear();
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
             } else {
-                // Chỉ spawn drop nếu tool hợp lệ theo kiểm tra phía trên.
-                if (hasDrop) Block.dropStacks(state, world, pos, blockEntity, player, tool);
+                // Spawn đúng danh sách drop đã được kiểm tra ở trên.
+                // Không gọi lại Block.dropStacks() để tránh việc kiểm tra drop lần hai
+                // cho kết quả khác với kết quả dùng để tính độ bền.
+                for (ItemStack drop : drops) {
+                    if (!drop.isEmpty()) {
+                        Block.dropStack(world, pos, drop);
+                    }
+                }
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             }
 
