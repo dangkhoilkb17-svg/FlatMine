@@ -67,16 +67,21 @@ public final class MiningJobManager {
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
             /*
-             * Kết hợp cơ chế phá/harvest và drop của Vanilla:
+             * Kết hợp cơ chế harvest/drop của Vanilla 1.21.1:
              *
-             * - Nếu block không yêu cầu tool, cúp/xẻng vẫn có thể harvest và nhận drop.
-             *   Ví dụ: cúp + Dirt hoặc xẻng + Dirt đều drop Dirt.
-             * - Nếu block yêu cầu tool, phải dùng đúng loại và đủ tier thông qua
-             *   ItemStack.isSuitableFor().
-             *   Ví dụ: cúp đá + Iron Ore -> drop; cúp gỗ + Iron Ore -> không drop;
-             *   cúp sắt + Diamond Ore -> không drop.
-             * - Tính drop trước khi destroyDrops để destroyDrops không làm thay đổi
-             *   quy tắc độ bền.
+             * 1. isToolRequired() + isSuitableFor() xác định điều kiện tool đối với
+             *    các block yêu cầu tool. Vanilla tự quyết định đúng loại tool và tier;
+             *    không hard-code danh sách quặng/tier trong mod.
+             *
+             * 2. getDroppedStacks(..., player, tool) dùng loot table + tool + player,
+             *    nên giữ được Silk Touch, Fortune và các điều kiện drop của Vanilla.
+             *
+             * 3. Block.dropStacks(...) được dùng để thực sự spawn drop. Hàm này còn
+             *    xử lý các trường hợp BlockEntity/inventory mà getDroppedStacks() không
+             *    bao gồm, thay vì tự spawn từng stack.
+             *
+             * 4. XP là cơ chế riêng của onStacksDropped(). Khi destroyDrops=false,
+             *    gọi nó để giữ XP mining; khi destroyDrops=true thì drop/XP đều bị bỏ.
              */
             boolean canHarvest = !state.isToolRequired() || tool.isSuitableFor(state);
             List<ItemStack> drops = canHarvest
@@ -84,7 +89,7 @@ public final class MiningJobManager {
                     : Collections.emptyList();
             boolean hasDrop = !drops.isEmpty();
 
-            // Có drop hợp lệ theo Vanilla -> -1 độ bền; không có -> -2.
+            // Theo yêu cầu của FlatMine: có item/block drop hợp lệ -> -1; không có -> -2.
             if (!player.isCreative() && tool.isDamageable()) {
                 tool.damage(hasDrop ? 1 : 2, player, EquipmentSlot.MAINHAND);
                 if (tool.isEmpty()) {
@@ -94,18 +99,15 @@ public final class MiningJobManager {
                 }
             }
 
-            // destroyDrops chỉ quyết định drop có xuất hiện hay không.
             if (destroyDrops) {
+                // Không gọi dropStacks/onStacksDropped: option này chủ động tiêu hủy drop.
                 if (blockEntity instanceof Inventory inv) inv.clear();
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
             } else {
-                // Spawn đúng danh sách drop đã được kiểm tra ở trên.
-                // Không gọi lại Block.dropStacks() để tránh việc kiểm tra drop lần hai
-                // cho kết quả khác với kết quả dùng để tính độ bền.
-                for (ItemStack drop : drops) {
-                    if (!drop.isEmpty()) {
-                        Block.dropStack(world, pos, drop);
-                    }
+                // Dùng API drop của Vanilla để giữ cả custom block drops và inventory drops.
+                if (canHarvest) {
+                    Block.dropStacks(state, world, pos, blockEntity, player, tool);
+                    state.onStacksDropped(world, pos, tool, true);
                 }
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             }
