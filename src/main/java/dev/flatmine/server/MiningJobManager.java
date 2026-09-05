@@ -6,7 +6,7 @@ import java.util.*;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.Block;
-import net.minecraft.block.block_entity.BlockEntity;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.inventory.Inventory;
@@ -71,8 +71,7 @@ public final class MiningJobManager {
              * - Block không yêu cầu tool đúng loại -> vẫn có thể drop bình thường.
              * - Block yêu cầu tool -> phải đúng loại và đúng tier (gỗ/đá/sắt/kim cương/netherite...).
              *
-             * Quan trọng: kiểm tra này xảy ra trước destroyDrops, nên option tiêu hủy
-             * drop không thể làm thay đổi việc tính độ bền.
+             * Kiểm tra trước destroyDrops để option tiêu hủy drop không ảnh hưởng độ bền.
              */
             boolean toolCanHarvest = !state.isToolRequired() || tool.isSuitableFor(state);
             List<ItemStack> drops = toolCanHarvest
@@ -95,7 +94,7 @@ public final class MiningJobManager {
                 if (blockEntity instanceof Inventory inv) inv.clear();
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
             } else {
-                // Chỉ spawn drop nếu tool hợp lệ theo cơ chế phía trên.
+                // Chỉ spawn drop nếu tool hợp lệ theo kiểm tra phía trên.
                 if (hasDrop) Block.dropStacks(state, world, pos, blockEntity, player, tool);
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             }
