@@ -25,7 +25,6 @@ public final class MiningJob {
         BlockPos minPos = new BlockPos(c.minX(), c.minY(), c.minZ());
         BlockPos maxPos = new BlockPos(c.maxX(), c.maxY(), c.maxZ());
 
-        // BƯỚC 1: LẤY TOÀN BỘ CÁC BLOCK BỎ VÀO DANH SÁCH
         List<BlockPos> list = new ArrayList<>();
         for (BlockPos pos : BlockPos.iterate(minPos, maxPos)) {
             if (!world.getBlockState(pos).isAir() && world.isInBuildLimit(pos)) {
@@ -33,19 +32,28 @@ public final class MiningJob {
             }
         }
 
-        // BƯỚC 2: SẮP XẾP TỪ Y CAO XUỐNG Y THẤP (Để đào cuốn chiếu từ trên xuống)
         list.sort((p1, p2) -> Integer.compare(p2.getY(), p1.getY()));
-        
-        // BƯỚC 3: ĐƯA VÀO HÀNG ĐỢI
         queue.addAll(list);
     }
 
     public boolean tick() {
-        if (player.isRemoved() || player.getWorld() != world || !player.interactionManager.isSurvivalLike()) {
-            MiningJobManager.clearSelection(player); // Xóa viền sáng nếu người chơi chết hoặc đổi map
-            return true; 
+        if (player.isRemoved() || player.getWorld() != world) {
+            MiningJobManager.clearSelection(player);
+            return true;
         }
-        
+
+        // Creative chỉ được dùng chế độ tiêu hủy. Không chạy harvest/drop/durability mechanics.
+        if (player.isCreative() && !destroyDrops) {
+            MiningJobManager.clearSelection(player);
+            return true;
+        }
+
+        // Survival-like mới được chạy cơ chế đào bình thường.
+        if (!player.isCreative() && !player.interactionManager.isSurvivalLike()) {
+            MiningJobManager.clearSelection(player);
+            return true;
+        }
+
         return MiningJobManager.processMiningTick(player, world, queue, 1.0f, destroyDrops);
     }
 
