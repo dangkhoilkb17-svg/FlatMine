@@ -61,14 +61,14 @@ public final class MiningJobManager {
         if (!isPickaxeOrShovel(tool)) {
             player.sendMessage(Text.literal("§c[FlatMine] Bị hủy: Bạn phải cầm Cúp hoặc Xẻng để tiếp tục đào!"), true);
             clearSelection(player);
-            return true; 
+            return true;
         }
 
-        int baseBlocksPerTick = 32; 
+        int baseBlocksPerTick = 32;
         int targetBreaks = Math.round(baseBlocksPerTick * speedMultiplier);
         int brokenCount = 0;
 
-        // 2. VÒNG LẶP ĐÀO & TIÊU HỦY ĐỒ
+        // 2. VÒNG LẶP ĐÀO
         while (!queue.isEmpty() && brokenCount < targetBreaks) {
             BlockPos pos = queue.poll();
             var state = world.getBlockState(pos);
@@ -79,6 +79,25 @@ public final class MiningJobManager {
 
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
+            // KIỂM TRA DROP ĐỘC LẬP VỚI CƠ CHẾ TIÊU HỦY DROP.
+            // Việc này phải xảy ra trước khi destroyDrops can thiệp vào drop.
+            List<ItemStack> drops = Block.getDroppedStacks(state, world, pos, blockEntity, player, tool);
+            boolean hasDrop = !drops.isEmpty();
+
+            // 3. TRỪ ĐỘ BỀN DỰA TRÊN KẾT QUẢ KIỂM TRA DROP
+            // Có drop -> -1, không có drop -> -2.
+            if (!player.isCreative() && tool.isDamageable()) {
+                int durabilityLoss = hasDrop ? 1 : 2;
+                tool.damage(durabilityLoss, player, EquipmentSlot.MAINHAND);
+
+                if (tool.isEmpty()) {
+                    player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
+                    clearSelection(player);
+                    return true;
+                }
+            }
+
+            // 4. XỬ LÝ DROP — HOÀN TOÀN TÁCH KHỎI VIỆC KIỂM TRA ĐỘ BỀN
             if (destroyDrops) {
                 // Tiêu hủy sạch đồ chứa bên trong (rương, lò nung, hopper...)
                 if (blockEntity instanceof Inventory inv) {
@@ -92,20 +111,7 @@ public final class MiningJobManager {
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             }
 
-            brokenCount++; 
-
-            // 3. TRỪ ĐỘ BỀN
-            int durabilityLoss = tool.isSuitableFor(state) ? 1 : 2;
-
-            if (!player.isCreative() && tool.isDamageable()) {
-                tool.damage(durabilityLoss, player, EquipmentSlot.MAINHAND);
-                
-                if (tool.isEmpty()) {
-                    player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
-                    clearSelection(player);
-                    return true; 
-                }
-            }
+            brokenCount++;
         }
 
         if (queue.isEmpty()) {
