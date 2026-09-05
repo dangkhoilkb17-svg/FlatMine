@@ -23,12 +23,11 @@ public final class FlatMine implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(FlatMinePayloads.Action.ID, FlatMinePayloads.Action.CODEC);
         PayloadTypeRegistry.playS2C().register(FlatMinePayloads.Status.ID, FlatMinePayloads.Status.CODEC);
 
-        ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Select.ID, (payload, context) -> 
+        ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Select.ID, (payload, context) ->
             context.server().execute(() -> select(context.player(), payload.pos()))
         );
 
-        ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Action.ID, (payload, context) -> 
-            // ĐÃ SỬA: Bổ sung payload.destroyDrops() để nhận cờ tiêu hủy
+        ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Action.ID, (payload, context) ->
             context.server().execute(() -> action(context.player(), payload.action(), payload.maxBlocks(), payload.destroyDrops()))
         );
 
@@ -36,20 +35,20 @@ public final class FlatMine implements ModInitializer {
     }
 
     static boolean validTool(ItemStack stack) {
-        return stack.isOf(Items.WOODEN_PICKAXE) || stack.isOf(Items.STONE_PICKAXE) || 
-               stack.isOf(Items.IRON_PICKAXE) || stack.isOf(Items.GOLDEN_PICKAXE) || 
-               stack.isOf(Items.DIAMOND_PICKAXE) || stack.isOf(Items.NETHERITE_PICKAXE) || 
-               stack.isOf(Items.WOODEN_SHOVEL) || stack.isOf(Items.STONE_SHOVEL) || 
-               stack.isOf(Items.IRON_SHOVEL) || stack.isOf(Items.GOLDEN_SHOVEL) || 
+        return stack.isOf(Items.WOODEN_PICKAXE) || stack.isOf(Items.STONE_PICKAXE) ||
+               stack.isOf(Items.IRON_PICKAXE) || stack.isOf(Items.GOLDEN_PICKAXE) ||
+               stack.isOf(Items.DIAMOND_PICKAXE) || stack.isOf(Items.NETHERITE_PICKAXE) ||
+               stack.isOf(Items.WOODEN_SHOVEL) || stack.isOf(Items.STONE_SHOVEL) ||
+               stack.isOf(Items.IRON_SHOVEL) || stack.isOf(Items.GOLDEN_SHOVEL) ||
                stack.isOf(Items.DIAMOND_SHOVEL) || stack.isOf(Items.NETHERITE_SHOVEL);
     }
 
     static void select(ServerPlayerEntity p, BlockPos pos) {
-        if (!(p.getWorld() instanceof ServerWorld w) || 
-            !p.interactionManager.isSurvivalLike() || 
-            !validTool(p.getMainHandStack()) || 
-            !w.isInBuildLimit(pos) || 
-            !w.isChunkLoaded(pos) || 
+        if (!(p.getWorld() instanceof ServerWorld w) ||
+            (!p.isCreative() && !p.interactionManager.isSurvivalLike()) ||
+            (!p.isCreative() && !validTool(p.getMainHandStack())) ||
+            !w.isInBuildLimit(pos) ||
+            !w.isChunkLoaded(pos) ||
             InteractiveBlocks.isInteractive(w, pos)) {
             return;
         }
@@ -71,7 +70,6 @@ public final class FlatMine implements ModInitializer {
         send(p, 2, s.first, s.second, c.volume(), remaining);
     }
 
-    // ĐÃ SỬA: Thêm tham số 'boolean destroyDrops' vào hàm action
     static void action(ServerPlayerEntity p, int a, long max, boolean destroyDrops) {
         if (a == 0) {
             cancel(p);
@@ -81,7 +79,11 @@ public final class FlatMine implements ModInitializer {
         Cuboid c = PENDING.get(p.getUuid());
         SelectionState s = SEL.get(p.getUuid());
 
-        if (c == null || s == null || s.dimension != p.getWorld().getRegistryKey() || !validTool(p.getMainHandStack())) {
+        boolean allowedMode = p.isCreative() ? destroyDrops : p.interactionManager.isSurvivalLike();
+        boolean allowedTool = p.isCreative() || validTool(p.getMainHandStack());
+
+        if (c == null || s == null || s.dimension != p.getWorld().getRegistryKey() ||
+            !allowedMode || !allowedTool) {
             return;
         }
 
@@ -92,19 +94,12 @@ public final class FlatMine implements ModInitializer {
         if (a == 1 || a == 2) {
             PENDING.put(p.getUuid(), c);
             send(p, 3, new BlockPos(c.minX(), c.minY(), c.minZ()), new BlockPos(c.maxX(), c.maxY(), c.maxZ()), c.volume(), p.getMainHandStack().getMaxDamage() - p.getMainHandStack().getDamage());
-            
-            // Nếu người chơi chọn đào ngay (Gửi trực tiếp lúc này)
-            // (Thường bạn sẽ để Client gọi một action nữa là 3, nhưng ở đây mình giả định bạn muốn xử lý như logic cũ)
-            // Ở file ConfirmScreen.java vừa sửa, chúng ta đã gửi action = 1 hoặc 2
-            
-            // Xóa ở PENDING trước khi bắt đầu
+
             PENDING.remove(p.getUuid());
-            // ĐÃ SỬA: Truyền biến destroyDrops vào MiningJobManager
             MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, destroyDrops);
             return;
         }
 
-        // Logic cũ (dự phòng)
         if (a == 3) {
             MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, destroyDrops);
             PENDING.remove(p.getUuid());
