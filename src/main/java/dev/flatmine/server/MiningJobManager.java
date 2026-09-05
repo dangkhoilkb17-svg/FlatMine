@@ -24,9 +24,7 @@ public final class MiningJobManager {
             Iterator<Map.Entry<UUID, MiningJob>> it = JOBS.entrySet().iterator();
             while (it.hasNext()) {
                 var e = it.next();
-                if (e.getValue().tick()) {
-                    it.remove();
-                }
+                if (e.getValue().tick()) it.remove();
             }
         });
     }
@@ -38,15 +36,10 @@ public final class MiningJobManager {
 
     public static void cancelJob(ServerPlayerEntity p) {
         MiningJob j = JOBS.remove(p.getUuid());
-        if (j != null) {
-            j.cancel();
-            clearSelection(p);
-        }
+        if (j != null) { j.cancel(); clearSelection(p); }
     }
 
-    public static boolean isRunning(ServerPlayerEntity p) {
-        return JOBS.containsKey(p.getUuid());
-    }
+    public static boolean isRunning(ServerPlayerEntity p) { return JOBS.containsKey(p.getUuid()); }
 
     public static void clearSelection(ServerPlayerEntity p) {
         if (p.networkHandler != null) {
@@ -57,39 +50,29 @@ public final class MiningJobManager {
     public static boolean processMiningTick(ServerPlayerEntity player, ServerWorld world, Queue<BlockPos> queue, float speedMultiplier, boolean destroyDrops) {
         ItemStack tool = player.getMainHandStack();
 
-        // 1. KIỂM TRA CÔNG CỤ
         if (!isPickaxeOrShovel(tool)) {
             player.sendMessage(Text.literal("§c[FlatMine] Bị hủy: Bạn phải cầm Cúp hoặc Xẻng để tiếp tục đào!"), true);
             clearSelection(player);
             return true;
         }
 
-        int baseBlocksPerTick = 32;
-        int targetBreaks = Math.round(baseBlocksPerTick * speedMultiplier);
+        int targetBreaks = Math.round(32 * speedMultiplier);
         int brokenCount = 0;
 
-        // 2. VÒNG LẶP ĐÀO
         while (!queue.isEmpty() && brokenCount < targetBreaks) {
             BlockPos pos = queue.poll();
             var state = world.getBlockState(pos);
-
-            if (state.isAir() || state.getHardness(world, pos) < 0) {
-                continue;
-            }
+            if (state.isAir() || state.getHardness(world, pos) < 0) continue;
 
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
-            // KIỂM TRA DROP ĐỘC LẬP VỚI CƠ CHẾ TIÊU HỦY DROP.
-            // Việc này phải xảy ra trước khi destroyDrops can thiệp vào drop.
+            // KIỂM TRA DROP TRƯỚC. Kết quả này độc lập với destroyDrops.
             List<ItemStack> drops = Block.getDroppedStacks(state, world, pos, blockEntity, player, tool);
             boolean hasDrop = !drops.isEmpty();
 
-            // 3. TRỪ ĐỘ BỀN DỰA TRÊN KẾT QUẢ KIỂM TRA DROP
-            // Có drop -> -1, không có drop -> -2.
+            // Có drop hợp lệ -> -1; không có drop -> -2.
             if (!player.isCreative() && tool.isDamageable()) {
-                int durabilityLoss = hasDrop ? 1 : 2;
-                tool.damage(durabilityLoss, player, EquipmentSlot.MAINHAND);
-
+                tool.damage(hasDrop ? 1 : 2, player, EquipmentSlot.MAINHAND);
                 if (tool.isEmpty()) {
                     player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
                     clearSelection(player);
@@ -97,17 +80,14 @@ public final class MiningJobManager {
                 }
             }
 
-            // 4. XỬ LÝ DROP — HOÀN TOÀN TÁCH KHỎI VIỆC KIỂM TRA ĐỘ BỀN
+            // destroyDrops chỉ xử lý việc drop có được xuất hiện hay không.
             if (destroyDrops) {
-                // Tiêu hủy sạch đồ chứa bên trong (rương, lò nung, hopper...)
-                if (blockEntity instanceof Inventory inv) {
-                    inv.clear();
-                }
-                // Thay thế trực tiếp bằng Air không phát tín hiệu drop
+                if (blockEntity instanceof Inventory inv) inv.clear();
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
             } else {
-                // Nhặt đồ bình thường khi không bật tiêu hủy
-                Block.dropStacks(state, world, pos, blockEntity, player, tool);
+                // Không gọi dropStacks nếu bước kiểm tra xác định không có drop.
+                // Vì vậy xẻng đào quặng sắt sẽ không làm rơi quặng.
+                if (hasDrop) Block.dropStacks(state, world, pos, blockEntity, player, tool);
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
             }
 
@@ -119,7 +99,6 @@ public final class MiningJobManager {
             clearSelection(player);
             return true;
         }
-
         return false;
     }
 
