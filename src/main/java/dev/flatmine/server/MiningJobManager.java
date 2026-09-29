@@ -8,7 +8,6 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.Blocks;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -76,18 +75,15 @@ public final class MiningJobManager {
              * Survival mining mechanics:
              * - FlatMine phá block độc lập với tốc độ/loại tool.
              * - Drop vẫn dùng điều kiện harvest + loot của Vanilla 1.21.1.
-             * - Đủ điều kiện harvest và có item/block drop -> -1 durability.
-             * - Không đủ điều kiện hoặc không có item/block drop -> -2 durability.
+             * - Durability được xử lý bởi chính postMine() của Vanilla.
+             * - Pickaxe và shovel đều dùng ToolItem/ToolComponent của Vanilla nên
+             *   damagePerBlock và Unbreaking/Unbreakable được xử lý đúng cơ chế vanilla.
              * - Block không yêu cầu tool vẫn có thể drop bình thường với cúp/xẻng.
              */
             boolean canHarvestForDrop = !state.isToolRequired() || tool.isSuitableFor(state);
-            List<ItemStack> drops = canHarvestForDrop
-                    ? Block.getDroppedStacks(state, world, pos, blockEntity, player, tool)
-                    : Collections.emptyList();
-            boolean hasDrop = !drops.isEmpty();
 
             if (!player.isCreative() && tool.isDamageable()) {
-                tool.damage(hasDrop ? 1 : 2, player, EquipmentSlot.MAINHAND);
+                tool.postMine(world, state, pos, player);
                 if (tool.isEmpty()) {
                     player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
                     clearSelection(player);
