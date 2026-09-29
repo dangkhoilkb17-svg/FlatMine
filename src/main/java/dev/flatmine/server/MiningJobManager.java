@@ -75,10 +75,10 @@ public final class MiningJobManager {
              * Survival mining mechanics:
              * - FlatMine phá block độc lập với tốc độ/loại tool.
              * - Drop vẫn dùng điều kiện harvest + loot của Vanilla 1.21.1.
-             * - Durability được xử lý bởi chính postMine() của Vanilla.
-             * - Pickaxe và shovel đều dùng ToolItem/ToolComponent của Vanilla nên
-             *   damagePerBlock và Unbreaking/Unbreakable được xử lý đúng cơ chế vanilla.
-             * - Block không yêu cầu tool vẫn có thể drop bình thường với cúp/xẻng.
+             * - Đào đúng tool: durability dùng chính postMine() của Vanilla.
+             * - Đào sai tool: giữ cơ chế FlatMine x2 durability.
+             * - postMine() xử lý damagePerBlock/Unbreaking/Unbreakable theo Vanilla;
+             *   nhánh x2 dùng ItemStack.damage() nên vẫn đi qua cơ chế Unbreaking.
              * - Giữ một bản copy của tool trước khi damage để loot không bị ảnh hưởng
              *   nếu tool vỡ ở chính block này, giống vanilla afterBreak.
              */
@@ -93,7 +93,19 @@ public final class MiningJobManager {
             }
 
             if (!player.isCreative() && tool.isDamageable()) {
-                tool.postMine(world, state, pos, player);
+                boolean wrongTool = !tool.isSuitableFor(state);
+
+                if (state.getHardness(world, pos) != 0.0F) {
+                    if (wrongTool) {
+                        // Cơ chế riêng của FlatMine: đào sai tool => x2 durability.
+                        // ItemStack.damage() vẫn áp dụng Unbreaking/Unbreakable như Vanilla.
+                        tool.damage(2, player, net.minecraft.entity.EquipmentSlot.MAINHAND);
+                    } else {
+                        // Đào đúng tool => hoàn toàn dùng cơ chế durability của Vanilla.
+                        tool.postMine(world, state, pos, player);
+                    }
+                }
+
                 if (tool.isEmpty()) {
                     player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
                     // Vanilla vẫn phá block thành công dù tool vừa hỏng.
