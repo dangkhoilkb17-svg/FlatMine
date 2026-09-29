@@ -13,7 +13,6 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
 public final class FlatMine implements ModInitializer {
-
     private static final Map<UUID, SelectionState> SEL = new HashMap<>();
     private static final Map<UUID, Cuboid> PENDING = new HashMap<>();
 
@@ -24,11 +23,17 @@ public final class FlatMine implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(FlatMinePayloads.Status.ID, FlatMinePayloads.Status.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Select.ID, (payload, context) ->
-            context.server().execute(() -> select(context.player(), payload.pos()) )
+            context.server().execute(() -> select(context.player(), payload.pos()))
         );
 
         ServerPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Action.ID, (payload, context) ->
-            context.server().execute(() -> action(context.player(), payload.action(), payload.maxBlocks(), payload.destroyDrops()))
+            context.server().execute(() -> action(
+                context.player(),
+                payload.action(),
+                payload.maxBlocks(),
+                payload.speedLevel(),
+                payload.destroyDrops()
+            ))
         );
 
         MiningJobManager.init();
@@ -45,7 +50,9 @@ public final class FlatMine implements ModInitializer {
 
     static void select(ServerPlayerEntity p, BlockPos pos) {
         boolean creative = p.isCreative();
+
         if (!(p.getWorld() instanceof ServerWorld w) ||
+            MiningJobManager.isRunning(p) ||
             (!creative && !p.interactionManager.isSurvivalLike()) ||
             (!creative && !validTool(p.getMainHandStack())) ||
             !w.isInBuildLimit(pos) ||
@@ -71,7 +78,7 @@ public final class FlatMine implements ModInitializer {
         send(p, 2, s.first, s.second, c.volume(), remaining);
     }
 
-    static void action(ServerPlayerEntity p, int a, long max, boolean destroyDrops) {
+    static void action(ServerPlayerEntity p, int a, long max, int speedLevel, boolean destroyDrops) {
         if (a == 0) {
             cancel(p);
             return;
@@ -81,7 +88,6 @@ public final class FlatMine implements ModInitializer {
         SelectionState s = SEL.get(p.getUuid());
         boolean creative = p.isCreative();
 
-        // Creative chỉ có một chế độ: đào và luôn tiêu hủy toàn bộ drop.
         boolean allowedMode = creative || p.interactionManager.isSurvivalLike();
         boolean allowedTool = creative || validTool(p.getMainHandStack());
 
@@ -96,26 +102,35 @@ public final class FlatMine implements ModInitializer {
 
         if (a == 1 || a == 2) {
             PENDING.put(p.getUuid(), c);
-            send(p, 3, new BlockPos(c.minX(), c.minY(), c.minZ()), new BlockPos(c.maxX(), c.maxY(), c.maxZ()), c.volume(), 0);
-
-            PENDING.remove(p.getUuid());
-            // Creative luôn ép destroyDrops=true. Survival giữ đúng lựa chọn của người chơi.
-            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, creative || destroyDrops);
+            send(p, 3,
+                new BlockPos(c.minX(), c.minY(), c.minZ()),
+                new BlockPos(c.maxX(), c.maxY(), c.maxZ()),
+                c.volume(), 0
+            );
             return;
         }
 
         if (a == 3) {
-            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, creative || destroyDrops);
+            float speedMultiplier = switch (speedLevel) {
+                case 3 -> 2.0f;
+                case 2 -> 1.5f;
+                default -> 1.0f;
+            };
+
             PENDING.remove(p.getUuid());
-            send(p, 4, new BlockPos(c.minX(), c.minY(), c.minZ()), new BlockPos(c.maxX(), c.maxY(), c.maxZ()), c.volume(), 0);
+            MiningJobManager.startJob(p, (ServerWorld) p.getWorld(), c, speedMultiplier, creative || destroyDrops);
         }
+    }
+
+    public static void clearSelectionState(ServerPlayerEntity p) {
+        SEL.remove(p.getUuid());
+        PENDING.remove(p.getUuid());
+        send(p, 0, BlockPos.ORIGIN, BlockPos.ORIGIN, 0L, 0);
     }
 
     static void cancel(ServerPlayerEntity p) {
         MiningJobManager.cancelJob(p);
-        SEL.computeIfAbsent(p.getUuid(), u -> new SelectionState()).clear();
-        PENDING.remove(p.getUuid());
-        send(p, 0, BlockPos.ORIGIN, BlockPos.ORIGIN, 0L, 0);
+        clearSelectionState(p);
     }
 
     static void send(ServerPlayerEntity p, int k, BlockPos a, BlockPos b, long n, int d) {

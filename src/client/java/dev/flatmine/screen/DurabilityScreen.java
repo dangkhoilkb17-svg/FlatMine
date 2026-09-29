@@ -10,19 +10,27 @@ import net.minecraft.text.Text;
 
 public final class DurabilityScreen extends Screen {
     private final long blocks;
+    private final boolean destroyDrops;
 
-    public DurabilityScreen(long b) {
+    public DurabilityScreen(long b, boolean destroyDrops) {
         super(Text.literal("Cảnh báo độ bền"));
         this.blocks = b;
+        this.destroyDrops = destroyDrops;
     }
 
     @Override
     protected void init() {
-        // ĐÃ SỬA: THÊM , false
-        addDrawableChild(ButtonWidget.builder(Text.literal("Tiếp tục"), b -> ClientPlayNetworking.send(new FlatMinePayloads.Action(1, ClientState.maxBlocks, false))).dimensions(width / 2 - 105, height / 2, 100, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Tiếp tục"), b -> {
+            ClientState.destroyDrops = destroyDrops;
+            ClientPlayNetworking.send(new FlatMinePayloads.Action(
+                1, ClientState.maxBlocks, ClientState.miningSpeedLevel(), destroyDrops
+            ));
+            close();
+        }).dimensions(width / 2 - 105, height / 2, 100, 20).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Hủy"), b -> {
-            // ĐÃ SỬA: THÊM , false
-            ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, false));
+            ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, 1, false));
+            ClientState.clear();
             close();
         }).dimensions(width / 2 + 5, height / 2, 100, 20).build());
     }

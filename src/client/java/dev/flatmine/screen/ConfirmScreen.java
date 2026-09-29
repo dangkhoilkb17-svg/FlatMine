@@ -23,45 +23,50 @@ public final class ConfirmScreen extends Screen {
     @Override
     protected void init() {
         int y = height / 2;
-        
-        // Thêm Checkbox lựa chọn tiêu hủy block (Mặc định: KHÔNG tiêu hủy)
+
         destroyDropsCheckbox = CheckboxWidget.builder(Text.literal("Tiêu hủy vật phẩm rơi ra (Chống lag)"), textRenderer)
                 .pos(width / 2 - 100, y - 30)
-                .checked(false)
+                .checked(ClientState.destroyDrops)
                 .build();
         addDrawableChild(destroyDropsCheckbox);
 
         if (blocks > ClientState.maxBlocks) {
             addDrawableChild(ButtonWidget.builder(Text.literal("Thu nhỏ vùng"), x -> {
-                ClientPlayNetworking.send(new FlatMinePayloads.Action(2, ClientState.maxBlocks, destroyDropsCheckbox.isChecked()));
-                ClientState.clear();
+                ClientState.destroyDrops = destroyDropsCheckbox.isChecked();
+                ClientPlayNetworking.send(new FlatMinePayloads.Action(
+                    2, ClientState.maxBlocks, ClientState.miningSpeedLevel(), ClientState.destroyDrops
+                ));
                 close();
             }).dimensions(width / 2 - 155, y, 100, 20).build());
-            
-            addDrawableChild(ButtonWidget.builder(Text.literal("Giữ nguyên"), x -> next()).dimensions(width / 2 - 50, y, 100, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Hủy"), x -> cancel()).dimensions(width / 2 + 55, y, 100, 20).build());
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("Giữ nguyên"), x -> next())
+                    .dimensions(width / 2 - 50, y, 100, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Hủy"), x -> cancel())
+                    .dimensions(width / 2 + 55, y, 100, 20).build());
         } else {
-            // Trường hợp vùng hợp lệ, thêm nút Đào ngay trên màn hình này
-            addDrawableChild(ButtonWidget.builder(Text.literal("Bắt đầu Đào"), x -> next()).dimensions(width / 2 - 105, y, 100, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Hủy"), x -> cancel()).dimensions(width / 2 + 5, y, 100, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Bắt đầu Đào"), x -> next())
+                    .dimensions(width / 2 - 105, y, 100, 20).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Hủy"), x -> cancel())
+                    .dimensions(width / 2 + 5, y, 100, 20).build());
         }
     }
 
     private void next() {
-        boolean destroy = destroyDropsCheckbox != null && destroyDropsCheckbox.isChecked();
+        ClientState.destroyDrops = destroyDropsCheckbox != null && destroyDropsCheckbox.isChecked();
+
         if (blocks > durability && client != null) {
-            // Lưu ý: Nếu mod của bạn có DurabilityScreen, bạn cũng cần cập nhật nó để gửi biến `destroy` lên server
-            client.setScreen(new DurabilityScreen(blocks)); 
+            client.setScreen(new DurabilityScreen(blocks, ClientState.destroyDrops));
         } else {
-            ClientPlayNetworking.send(new FlatMinePayloads.Action(1, ClientState.maxBlocks, destroy));
-            ClientState.clear(); // XÓA VIỀN SÁNG LẬP TỨC
+            ClientPlayNetworking.send(new FlatMinePayloads.Action(
+                1, ClientState.maxBlocks, ClientState.miningSpeedLevel(), ClientState.destroyDrops
+            ));
             close();
         }
     }
 
     private void cancel() {
-        ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, false));
-        ClientState.clear(); // XÓA VIỀN SÁNG LẬP TỨC
+        ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, 1, false));
+        ClientState.clear();
         close();
     }
 

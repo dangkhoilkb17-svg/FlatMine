@@ -1,7 +1,7 @@
 package dev.flatmine.server;
 
+import dev.flatmine.FlatMine;
 import dev.flatmine.common.Cuboid;
-import dev.flatmine.network.FlatMinePayloads;
 import java.util.*;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -28,40 +28,41 @@ public final class MiningJobManager {
         });
     }
 
-    public static void startJob(ServerPlayerEntity p, ServerWorld w, Cuboid c, boolean destroyDrops) {
+    public static void startJob(ServerPlayerEntity p, ServerWorld w, Cuboid c, float speedMultiplier, boolean destroyDrops) {
         cancelJob(p);
-        JOBS.put(p.getUuid(), new MiningJob(p, w, c, destroyDrops));
+        JOBS.put(p.getUuid(), new MiningJob(p, w, c, speedMultiplier, destroyDrops));
     }
 
     public static void cancelJob(ServerPlayerEntity p) {
         MiningJob j = JOBS.remove(p.getUuid());
-        if (j != null) { j.cancel(); clearSelection(p); }
+        if (j != null) {
+            j.cancel();
+            clearSelection(p);
+        }
     }
 
-    public static boolean isRunning(ServerPlayerEntity p) { return JOBS.containsKey(p.getUuid()); }
+    public static boolean isRunning(ServerPlayerEntity p) {
+        return JOBS.containsKey(p.getUuid());
+    }
 
     public static void clearSelection(ServerPlayerEntity p) {
-        if (p.networkHandler != null) {
-            ServerPlayNetworking.send(p, new FlatMinePayloads.Status(0, BlockPos.ORIGIN, BlockPos.ORIGIN, 0, 0));
-        }
+        FlatMine.clearSelectionState(p);
     }
 
     public static boolean processMiningTick(ServerPlayerEntity player, ServerWorld world, Queue<BlockPos> queue, float speedMultiplier, boolean destroyDrops) {
         ItemStack tool = player.getMainHandStack();
 
-        // Creative: chỉ chạy chế độ tiêu hủy, không kiểm tra tool, harvest, drop hay durability.
         if (player.isCreative() && destroyDrops) {
-            return destroyQueue(world, queue, 32 * speedMultiplier, true, player);
+            return destroyQueue(world, queue, 32 * speedMultiplier, player);
         }
 
-        // Mọi chế độ khác phải là Survival-like và có cúp/xẻng để dùng mining mechanics.
         if (!isPickaxeOrShovel(tool)) {
             player.sendMessage(Text.literal("§c[FlatMine] Bị hủy: Bạn phải cầm Cúp hoặc Xẻng để tiếp tục đào!"), true);
             clearSelection(player);
             return true;
         }
 
-        int targetBreaks = Math.round(32 * speedMultiplier);
+        int targetBreaks = Math.max(1, Math.round(32 * speedMultiplier));
         int brokenCount = 0;
 
         while (!queue.isEmpty() && brokenCount < targetBreaks) {
@@ -71,17 +72,6 @@ public final class MiningJobManager {
 
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
-            /*
-             * Survival mining mechanics:
-             * - FlatMine phá block độc lập với tốc độ/loại tool.
-             * - Drop vẫn dùng điều kiện harvest + loot của Vanilla 1.21.1.
-             * - Đào đúng tool: durability dùng chính postMine() của Vanilla.
-             * - Đào sai tool: giữ cơ chế FlatMine x2 durability.
-             * - postMine() xử lý damagePerBlock/Unbreaking/Unbreakable theo Vanilla;
-             *   nhánh x2 dùng ItemStack.damage() nên vẫn đi qua cơ chế Unbreaking.
-             * - Giữ một bản copy của tool trước khi damage để loot không bị ảnh hưởng
-             *   nếu tool vỡ ở chính block này, giống vanilla afterBreak.
-             */
             boolean canHarvestForDrop = !state.isToolRequired() || tool.isSuitableFor(state);
             ItemStack toolForDrops = tool.copy();
 
@@ -97,19 +87,14 @@ public final class MiningJobManager {
 
                 if (state.getHardness(world, pos) != 0.0F) {
                     if (wrongTool) {
-                        // Cơ chế riêng của FlatMine: đào sai tool => x2 durability.
-                        // ItemStack.damage() vẫn áp dụng Unbreaking/Unbreakable như Vanilla.
                         tool.damage(2, player, net.minecraft.entity.EquipmentSlot.MAINHAND);
                     } else {
-                        // Đào đúng tool => hoàn toàn dùng cơ chế durability của Vanilla.
                         tool.postMine(world, state, pos, player);
                     }
                 }
 
                 if (tool.isEmpty()) {
                     player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
-                    // Vanilla vẫn phá block thành công dù tool vừa hỏng.
-                    // Chỉ tiếp tục xử lý loot bằng bản copy của tool trước khi damage.
                 }
             }
 
@@ -129,7 +114,7 @@ public final class MiningJobManager {
         return false;
     }
 
-    private static boolean destroyQueue(ServerWorld world, Queue<BlockPos> queue, float target, boolean force, ServerPlayerEntity player) {
+    private static boolean destroyQueue(ServerWorld world, Queue<BlockPos> queue, float target, ServerPlayerEntity player) {
         int brokenCount = 0;
         int targetBreaks = Math.max(1, Math.round(target));
 

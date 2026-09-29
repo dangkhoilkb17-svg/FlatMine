@@ -19,13 +19,16 @@ public final class FinalConfirmScreen extends Screen {
     @Override
     protected void init() {
         addDrawableChild(ButtonWidget.builder(Text.literal("Bắt đầu đào"), b -> {
-            // ĐÃ SỬA: THÊM , false
-            ClientPlayNetworking.send(new FlatMinePayloads.Action(3, ClientState.maxBlocks, false));
+            ClientPlayNetworking.send(new FlatMinePayloads.Action(
+                3, ClientState.maxBlocks, ClientState.miningSpeedLevel(), ClientState.destroyDrops
+            ));
+            ClientState.clear();
             close();
         }).dimensions(width / 2 - 105, height / 2, 100, 20).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Hủy"), b -> {
-            // ĐÃ SỬA: THÊM , false
-            ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, false));
+            ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, 1, false));
+            ClientState.clear();
             close();
         }).dimensions(width / 2 + 5, height / 2, 100, 20).build());
     }

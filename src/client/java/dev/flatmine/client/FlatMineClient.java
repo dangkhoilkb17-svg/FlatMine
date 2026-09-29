@@ -31,23 +31,19 @@ public final class FlatMineClient implements ClientModInitializer {
         KeyBinding toggle = KeyBindingHelper.registerKeyBinding(
             new KeyBinding("key.flatmine.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.flatmine")
         );
-        KeyBinding toggle = KeyBindingHelper.registerKeyBinding(
-            new KeyBinding("key.flatmine.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.flatmine")
-        );
 
         UseBlockCallback.EVENT.register((p, w, h, hit) -> {
             if (!w.isClient || h != Hand.MAIN_HAND) return ActionResult.PASS;
-            // FlatMine chỉ nhận thao tác khi người chơi đã bật công tắc.
             if (!ClientState.enabled) return ActionResult.PASS;
             if (!isTool(p.getMainHandStack())) return ActionResult.PASS;
-            
+
             BlockState s = w.getBlockState(hit.getBlockPos());
-            if (s.createScreenHandlerFactory(w, hit.getBlockPos()) != null || 
-                s.getBlock() instanceof DoorBlock || 
-                s.getBlock() instanceof TrapdoorBlock || 
-                s.getBlock() instanceof FenceGateBlock || 
-                s.getBlock() instanceof ButtonBlock || 
-                s.getBlock() instanceof LeverBlock || 
+            if (s.createScreenHandlerFactory(w, hit.getBlockPos()) != null ||
+                s.getBlock() instanceof DoorBlock ||
+                s.getBlock() instanceof TrapdoorBlock ||
+                s.getBlock() instanceof FenceGateBlock ||
+                s.getBlock() instanceof ButtonBlock ||
+                s.getBlock() instanceof LeverBlock ||
                 s.getBlock() instanceof CraftingTableBlock) {
                 return ActionResult.PASS;
             }
@@ -56,7 +52,7 @@ public final class FlatMineClient implements ClientModInitializer {
             return ActionResult.SUCCESS;
         });
 
-        ClientPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Status.ID, (payload, ctx) -> 
+        ClientPlayNetworking.registerGlobalReceiver(FlatMinePayloads.Status.ID, (payload, ctx) ->
             ctx.client().execute(() -> handle(payload))
         );
 
@@ -67,9 +63,8 @@ public final class FlatMineClient implements ClientModInitializer {
                 ClientState.enabled = !ClientState.enabled;
 
                 if (!ClientState.enabled) {
-                    // Tắt FlatMine thì hủy luôn job/selection hiện tại, tránh trạng thái còn chạy.
                     ClientState.clear();
-                    ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, false));
+                    ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, 1, false));
                     c.setScreen(null);
                     if (c.player != null) {
                         c.player.sendMessage(net.minecraft.text.Text.literal("§c[FlatMine] ĐÃ TẮT"), true);
@@ -81,13 +76,14 @@ public final class FlatMineClient implements ClientModInitializer {
 
             while (cancel.wasPressed()) {
                 ClientState.clear();
-                // ĐÃ SỬA: THÊM , false
-                ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, false));
+                ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, 1, false));
                 c.setScreen(null);
             }
+
             while (settings.wasPressed()) {
                 c.setScreen(new SettingsScreen(c.currentScreen));
             }
+
             if (!tutorialShown && c.player != null) {
                 tutorialShown = true;
                 c.setScreen(new TutorialScreen());
@@ -96,23 +92,27 @@ public final class FlatMineClient implements ClientModInitializer {
     }
 
     static boolean isTool(net.minecraft.item.ItemStack s) {
-        return s.isIn(net.minecraft.registry.tag.ItemTags.PICKAXES) || 
+        return s.isIn(net.minecraft.registry.tag.ItemTags.PICKAXES) ||
                s.isIn(net.minecraft.registry.tag.ItemTags.SHOVELS);
     }
 
     static void handle(FlatMinePayloads.Status p) {
         MinecraftClient c = MinecraftClient.getInstance();
+
         if (p.kind() == 0) {
             ClientState.clear();
             return;
         }
+
         ClientState.a = p.a();
         ClientState.b = p.b();
-        
+
         if (p.kind() == 2) {
             c.setScreen(new ConfirmScreen(p.blocks(), p.durability()));
         } else if (p.kind() == 3) {
             c.setScreen(new FinalConfirmScreen(p.blocks()));
+        } else if (p.kind() == 4) {
+            ClientState.clear();
         }
     }
 }

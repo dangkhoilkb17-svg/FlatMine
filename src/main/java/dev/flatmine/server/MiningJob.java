@@ -14,11 +14,13 @@ public final class MiningJob {
     private final ServerPlayerEntity player;
     private final ServerWorld world;
     private final Queue<BlockPos> queue;
+    private final float speedMultiplier;
     private final boolean destroyDrops;
 
-    public MiningJob(ServerPlayerEntity p, ServerWorld w, Cuboid c, boolean destroyDrops) {
+    public MiningJob(ServerPlayerEntity p, ServerWorld w, Cuboid c, float speedMultiplier, boolean destroyDrops) {
         this.player = p;
         this.world = w;
+        this.speedMultiplier = speedMultiplier;
         this.destroyDrops = destroyDrops;
         this.queue = new LinkedList<>();
 
@@ -42,19 +44,17 @@ public final class MiningJob {
             return true;
         }
 
-        // Creative chỉ được dùng chế độ tiêu hủy. Không chạy harvest/drop/durability mechanics.
         if (player.isCreative() && !destroyDrops) {
             MiningJobManager.clearSelection(player);
             return true;
         }
 
-        // Survival-like mới được chạy cơ chế đào bình thường.
         if (!player.isCreative() && !player.interactionManager.isSurvivalLike()) {
             MiningJobManager.clearSelection(player);
             return true;
         }
 
-        return MiningJobManager.processMiningTick(player, world, queue, 1.0f, destroyDrops);
+        return MiningJobManager.processMiningTick(player, world, queue, speedMultiplier, destroyDrops);
     }
 
     public void cancel() {
