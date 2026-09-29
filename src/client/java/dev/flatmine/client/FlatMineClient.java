@@ -28,9 +28,14 @@ public final class FlatMineClient implements ClientModInitializer {
         KeyBinding settings = KeyBindingHelper.registerKeyBinding(
             new KeyBinding("key.flatmine.settings", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_K, "category.flatmine")
         );
+        KeyBinding toggle = KeyBindingHelper.registerKeyBinding(
+            new KeyBinding("key.flatmine.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.flatmine")
+        );
 
         UseBlockCallback.EVENT.register((p, w, h, hit) -> {
             if (!w.isClient || h != Hand.MAIN_HAND) return ActionResult.PASS;
+            // FlatMine chỉ nhận thao tác khi người chơi đã bật công tắc.
+            if (!ClientState.enabled) return ActionResult.PASS;
             if (!isTool(p.getMainHandStack())) return ActionResult.PASS;
             
             BlockState s = w.getBlockState(hit.getBlockPos());
@@ -55,6 +60,22 @@ public final class FlatMineClient implements ClientModInitializer {
         WorldRenderEvents.AFTER_TRANSLUCENT.register(SelectionRenderer::render);
 
         ClientTickEvents.END_CLIENT_TICK.register(c -> {
+            while (toggle.wasPressed()) {
+                ClientState.enabled = !ClientState.enabled;
+
+                if (!ClientState.enabled) {
+                    // Tắt FlatMine thì hủy luôn job/selection hiện tại, tránh trạng thái còn chạy.
+                    ClientState.clear();
+                    ClientPlayNetworking.send(new FlatMinePayloads.Action(0, ClientState.maxBlocks, false));
+                    c.setScreen(null);
+                    if (c.player != null) {
+                        c.player.sendMessage(net.minecraft.text.Text.literal("§c[FlatMine] ĐÃ TẮT"), true);
+                    }
+                } else if (c.player != null) {
+                    c.player.sendMessage(net.minecraft.text.Text.literal("§a[FlatMine] ĐÃ BẬT"), true);
+                }
+            }
+
             while (cancel.wasPressed()) {
                 ClientState.clear();
                 // ĐÃ SỬA: THÊM , false
