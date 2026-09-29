@@ -31,6 +31,9 @@ public final class FlatMineClient implements ClientModInitializer {
         KeyBinding toggle = KeyBindingHelper.registerKeyBinding(
             new KeyBinding("key.flatmine.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.flatmine")
         );
+        KeyBinding toggle = KeyBindingHelper.registerKeyBinding(
+            new KeyBinding("key.flatmine.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.flatmine")
+        );
 
         UseBlockCallback.EVENT.register((p, w, h, hit) -> {
             if (!w.isClient || h != Hand.MAIN_HAND) return ActionResult.PASS;
