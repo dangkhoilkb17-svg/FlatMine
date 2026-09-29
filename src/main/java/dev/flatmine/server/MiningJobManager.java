@@ -79,27 +79,31 @@ public final class MiningJobManager {
              * - Pickaxe và shovel đều dùng ToolItem/ToolComponent của Vanilla nên
              *   damagePerBlock và Unbreaking/Unbreakable được xử lý đúng cơ chế vanilla.
              * - Block không yêu cầu tool vẫn có thể drop bình thường với cúp/xẻng.
+             * - Giữ một bản copy của tool trước khi damage để loot không bị ảnh hưởng
+             *   nếu tool vỡ ở chính block này, giống vanilla afterBreak.
              */
             boolean canHarvestForDrop = !state.isToolRequired() || tool.isSuitableFor(state);
-
-            if (!player.isCreative() && tool.isDamageable()) {
-                tool.postMine(world, state, pos, player);
-                if (tool.isEmpty()) {
-                    player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
-                    clearSelection(player);
-                    return true;
-                }
-            }
+            ItemStack toolForDrops = tool.copy();
 
             if (destroyDrops) {
                 if (blockEntity instanceof Inventory inv) inv.clear();
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS | Block.FORCE_STATE);
             } else {
-                if (canHarvestForDrop) {
-                    Block.dropStacks(state, world, pos, blockEntity, player, tool);
-                    state.onStacksDropped(world, pos, tool, true);
-                }
                 world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+            }
+
+            if (!player.isCreative() && tool.isDamageable()) {
+                tool.postMine(world, state, pos, player);
+                if (tool.isEmpty()) {
+                    player.sendMessage(Text.literal("§c[FlatMine] Công cụ của bạn đã vỡ!"), true);
+                    // Vanilla vẫn phá block thành công dù tool vừa hỏng.
+                    // Chỉ tiếp tục xử lý loot bằng bản copy của tool trước khi damage.
+                }
+            }
+
+            if (!destroyDrops && canHarvestForDrop) {
+                Block.dropStacks(state, world, pos, blockEntity, player, toolForDrops);
+                state.onStacksDropped(world, pos, toolForDrops, true);
             }
 
             brokenCount++;
