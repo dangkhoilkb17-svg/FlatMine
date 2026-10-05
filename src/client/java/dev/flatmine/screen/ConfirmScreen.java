@@ -54,7 +54,7 @@ public final class ConfirmScreen extends Screen {
     private void next() {
         ClientState.destroyDrops = destroyDropsCheckbox != null && destroyDropsCheckbox.isChecked();
 
-        if (blocks > durability && client != null) {
+        if (blocks > durability / 2L && client != null) {
             client.setScreen(new DurabilityScreen(blocks, ClientState.destroyDrops));
         } else {
             ClientPlayNetworking.send(new FlatMinePayloads.Action(
