@@ -10,6 +10,8 @@ import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.Blocks;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.PickaxeItem;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -83,13 +85,14 @@ public final class MiningJobManager {
             }
 
             if (!player.isCreative() && tool.isDamageable()) {
-                boolean wrongTool = !tool.isSuitableFor(state);
+                boolean correctForFlatMine = tool.isSuitableFor(state) ||
+                    (tool.getItem() instanceof PickaxeItem && state.isIn(BlockTags.SHOVEL_MINEABLE));
 
                 if (state.getHardness(world, pos) != 0.0F) {
-                    if (wrongTool) {
-                        tool.damage(2, player, net.minecraft.entity.EquipmentSlot.MAINHAND);
-                    } else {
+                    if (correctForFlatMine) {
                         tool.postMine(world, state, pos, player);
+                    } else {
+                        tool.damage(2, player, net.minecraft.entity.EquipmentSlot.MAINHAND);
                     }
                 }
 
